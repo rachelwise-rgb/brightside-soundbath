@@ -1034,10 +1034,21 @@ var NS = "http://www.w3.org/2000/svg";
     if(form.company.value) return;
     var payload = { name: form.name.value.trim(), email: form.email.value.trim(), ideas: form.ideas.value.trim(), page: location.href };
     submit.disabled = true; submit.textContent = 'Saving your spot…';
-    var ok = function(){ form.style.display='none'; var d=document.getElementById('regDone'); d.style.display='block'; d.scrollIntoView({behavior:'smooth',block:'center'}); };
-    var bad = function(){ submit.disabled=false; submit.innerHTML='Save my spot &rarr;'; alertB.style.display='block'; };
+    var settled = false;
+    var ok = function(){ if(settled) return; settled = true; clearTimeout(slowTimer);
+      form.style.display='none'; var d=document.getElementById('regDone'); d.style.display='block'; d.scrollIntoView({behavior:'smooth',block:'center'}); };
+    var bad = function(){ if(settled) return; settled = true; clearTimeout(slowTimer);
+      submit.disabled=false; submit.innerHTML='Save my spot &rarr;'; alertB.style.display='block'; };
     if(REG_ENDPOINT.indexOf('http')!==0){ console.warn('REG_ENDPOINT not set — RSVP was not saved.'); ok(); return; }
-    fetch(REG_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)}).then(ok).catch(bad);
+    /* Google Apps Script saves the RSVP and sends the confirmation email FIRST, then redirects the
+       browser to a second Google address just to say "done". That last hop can be slow or blocked by
+       work networks/extensions even though the RSVP already went through. So:
+         - success screen as soon as the request finishes, or after 6s at most;
+         - only treat it as a failure if the device is actually offline (nothing could have been sent). */
+    var slowTimer = setTimeout(ok, 6000);
+    fetch(REG_ENDPOINT,{method:'POST',mode:'no-cors',keepalive:true,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)})
+      .then(ok)
+      .catch(function(){ if(navigator.onLine === false) bad(); else ok(); });
   });
 })();
 </script>
